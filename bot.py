@@ -1,4 +1,5 @@
 import tweepy
+from datetime import datetime, timedelta
 import secret  # file to hold keys & tokens
 
 auth = tweepy.OAuthHandler(secret.twitter_API_key, secret.twitter_API_secret_key)
@@ -52,17 +53,29 @@ def send_biolinks(link_dict, rec_handle):
     api.send_direct_message(recipient_id=rec_id, text=message)  # send the dm to handle provided thru bot
 
 
-def check_tweets(rec_handle, num=2):
+def check_tweets(rec_handle, num=7):
+    """
+    :param rec_handle: the twitter user that is getting the notifications
+    :param num: number of tweets we will pull from each artist
+    :return: num of tweets sent thru dm, after sending
+    """
+    tweets_sent = 0
     artists = api.friends(id_aka_handle)  # returns all accounts the bot is following as User Objects
+    cur_time = datetime.now()
+    two_wks_ago = cur_time - timedelta(days=14)
     for artist in artists:
         artist_tweets = api.user_timeline(artist.screen_name, count=num)
         print('Now checking...'+ artist.screen_name)
         for tweet in artist_tweets:
+            if tweet.created_at <= two_wks_ago:  # if the tweet is older than two weeks then move on to next tweet (we only care about recent drops)
+                continue
             message = ''
             if tweet.entities['urls'] and not tweet.is_quote_status:  # if the tweet contains a url and is not a quoted tweet
                 if not tweet.entities['urls'][0]['display_url'].startswith('twitter.com'): # ensures the url is not just another twitter link (retweet or photo)
                     message += 'https://twitter.com/' +artist.screen_name+ '/status/' + tweet.id_str
                     api.send_direct_message(api.get_user(rec_handle).id, message)
+                    tweets_sent += 1
+    return tweets_sent
 
 
 if __name__ == '__main__':
@@ -75,5 +88,5 @@ if __name__ == '__main__':
         send_biolinks(links_in_bio(api.friends(id_aka_handle)), rec_handle=username)
         print('BioLinks sent. Check dms \n')
 
-    check_tweets(rec_handle=username)
-    print('done checking. any tweets should be in your dms')
+    num_sent = check_tweets(rec_handle=username)
+    print('done checking. '+str(num_sent)+' tweets have been sent to your dms.')
